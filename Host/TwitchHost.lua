@@ -192,6 +192,176 @@ function Instance:onRevokeOAuthToken()
 
 end
 
+--------------------------------------------------------------------------------
+-- EventSub stuff       
+--------------------------------------------------------------------------------
+
+Instance.tblEventSubListen = {}
+Instance.EventSubWebSocket = nil
+Instance.broadcaster_id = nil
+
+function Instance:eventSubListen(topic, user_id, inst, fn)
+
+	self.broadcaster_id = user_id
+
+	-- Gets list of current subscriptions
+	--[[log("[EventSub] Getting list of current subscriptions")
+	fetch(self, self.host, "/helix/eventsub/subscriptions",
+		{
+			method="GET",
+			headers={'Content-Type: application/json', 'Client-ID: '.. client_id, 'Authorization: Bearer '.. self.access_token}
+		}):next(jsonify):next(function (obj)
+			log("[EventSub] Parse this list for an existing session id: " .. json.encode(obj))
+		end) ]]--
+	
+	-- Twitch Discord says it isn't necessary to manually remove disconnected sessions
+	
+	-- Skip if we already have this topic
+	if (self.tblEventSubListen[topic]) then
+		return
+	end
+
+	self.tblEventSubListen[topic] = { inst=inst, fn=fn }
+
+
+
+
+	if (not self.EventSubWebSocket) then
+		log("[EventSub] Connecting")
+		self:_eventSubConnect()		-- Connect on first listen
+	elseif (self.EventSubWebSocket:isConnected()) then
+		log("[EventSub] Sending Sub Request")
+		-- This condition can probably be removed, but I'm leaving it in for now.
+		-- WebSocket can't be reconnected to unless explicitly receiving a reconnect message, so a new connection will be made
+		-- each time Polypop is restarted.
+		-- self.EventSubWebSocket:send('{ "type":"' .. topic .. '", "version": "2", "condition":{"broadcaster_user_id":' .. self.broadcaster_id .. '}, "transport": { "method": "websocket" }}')
+	end
+	
+end
+
+
+function Instance:_eventSubConnect()
+	log("[EventSub] Opening websocket")
+	self.EventSubWebSocket = self.host:openWebSocket("wss://eventsub.wss.twitch.tv/ws")
+	self.EventSubWebSocket:setAutoReconnect(true)
+	self.EventSubWebSocket:addEventListener("onConnected", self, self._eventSubConnected)
+	self.EventSubWebSocket:addEventListener("onDisconnected", self, self._eventSubDisconnected)
+	self.EventSubWebSocket:addEventListener("onMessage", self, self._eventSubMessage)
+end	
+
+function Instance:_eventSubConnected()
+		
+	log("[EventSub] Websocket connected")
+	-- log("[EventSub] broadcaster id: ".. )
+
+	-- log("[EventSub] We need to handle the response here.")
+	if (self.eventSubSessionId) then
+		log("[EventSub] Session ID: ".. self.eventSubSessionId)
+	else
+		log("[EventSub] Session ID not yet available.")
+	end  
+		
+	-- self:_eventSubCreatePingTimer()
+
+end
+
+function Instance:_eventSubCreatePingTimer()
+	getAnimator():createTimer(self, self._eventSubPingServer, seconds(60*(4.5+math.random()*0.4)))
+end
+
+function Instance:_eventSubPingServer()
+	log("[EventSub] Pinging Twitch")
+	self.EventSubWebSocket:send('{ "type":"PING" }')
+	getAnimator():createTimer(self, self._eventSubReconnect, seconds(10))
+end
+
+function Instance:_eventSubReconnect(reconnect_url)
+	log("[EventSub] Attempting to reconnect")
+	self.EventSubWebSocket:reconnect('{ "reconnect":'.. reconnect_url..'}')
+end
+
+function Instance:_eventSubMessage(msg)
+	
+	local obj, decodeError = json.decode(msg)
+
+	if obj then
+		
+		if obj.metadata.message_type == "session_welcome" then
+			log("[EventSub] Session welcome received")
+			-- Access the session ID from the payload
+			self.eventSubSessionId = obj.payload.session.id
+						
+			-- log("[EventSub] sending Fetch with Session ID: ".. self.eventSubSessionId)
+			fetch(self, self.host, "/helix/eventsub/subscriptions", 
+			{
+				method="POST",
+				headers={'Content-Type: application/json', 'Client-ID: '.. client_id, 'Authorization: Bearer '.. self.access_token},
+				body = json.encode({
+					type="channel.follow",
+					version="2",
+					condition={
+						broadcaster_user_id=self.broadcaster_id,
+						moderator_user_id=self.broadcaster_id,
+					},
+					transport={
+						method="websocket",
+						session_id=self.eventSubSessionId
+					}
+				})
+			}):next(jsonify)
+
+		elseif obj.metadata.message_type == "notification" then
+			log("[EventSub] Notification received")
+			-- log("[EventSub] Notification payload: ".. json.encode(obj.payload))
+
+			local elem = self.tblEventSubListen[obj.payload.subscription.type]
+			
+			if (elem) then
+				-- log("[EventSub] Calling Alert Function with payload: ".. json.encode(obj.payload.event))
+				elem.fn(elem.inst, json.encode(obj.payload.event))
+			end
+
+			self.newFollower = obj.payload.event.user_name
+			-- log("[EventSub] Follower: ".. self.newFollower)
+		
+			
+		elseif obj.metadata.message_type == "reconnect" then
+			log("[EventSub] Reconnect received")
+			local reconnect_url = obj.payload.session.reconnect_url
+			self._eventSubReconnect(reconnect_url)
+		else
+			-- log("[EventSub] Message type is not a welcome: " .. obj.metadata.message_type)
+		end
+	else
+		log("[EventSub] Error decoding message: " .. decodeError)
+	end
+
+end
+
+function Instance:_eventSubDisconnected()
+	getAnimator():stopTimer(self, self._eventSubPingServer)
+	getAnimator():stopTimer(self, self._eventSubReconnect)
+end
+
+function Instance:_eventSubReset()
+
+	if (exists(self.EventSubWebSocket)) then
+		log("[EventSub] Closing EventSub websocket")
+		self.EventSubWebSocket:removeEventListener("onConnected", self, self._eventSubConnected)
+		self.EventSubWebSocket:removeEventListener("onDisconnected", self, self._eventSubDisconnected)
+		self.EventSubWebSocket:removeEventListener("onMessage", self, self._eventSubMessage)
+		self.EventSubWebSocket:disconnect()
+		self:_onEventSubDisconnected()
+	end
+	self.EventTblListen = {}
+	self.EventSubWebSocket = nil
+
+end
+
+
+
+
+
 
 --------------------------------------------------------------------------------
 -- PubSub stuff
@@ -199,6 +369,7 @@ end
 
 Instance.tblListen = {}
 Instance.webSocket = nil
+
 
 function Instance:pubSubListen(topic, inst, fn)
 
@@ -240,6 +411,7 @@ function Instance:_WsConnect()
 	self.webSocket:addEventListener("onDisconnected", self, self._onWsDisconnected)
 	self.webSocket:addEventListener("onMessage", self, self._onWsMessage)
 
+
 end
 
 function Instance:_onWsConnected()
@@ -258,6 +430,7 @@ function Instance:_onWsConnected()
 	self:_WsCreatePingTimer()
 
 end
+
 
 function Instance:_WsCreatePingTimer()
 	getAnimator():createTimer(self, self._WsPingServer, seconds(60*(4.5+math.random()*0.4)))
@@ -298,7 +471,6 @@ function Instance:_onWsMessage(msg)
 			self:tryRefreshToken()
 		end
 	end
-
 end
 
 function Instance:_onWsDisconnected()
@@ -554,3 +726,4 @@ function Instance:_ChatReset()
 	self.chatWebSocket = nil
 
 end
+

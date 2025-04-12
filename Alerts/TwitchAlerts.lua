@@ -404,6 +404,12 @@ function Instance:onNewSubscription(obj)
 
 end
 
+function Instance:raiseAlertWithUsername(alert, args)
+	-- Need to get args for the profile_url.
+	-- Hoping the Query will work with live followers.
+	alert:raise(args)
+end
+
 function Instance:raiseAlertWithProfileUrl(alert, user_name, args)
 
 	self:queryUserInfo(user_name, function (info)
@@ -415,7 +421,59 @@ function Instance:raiseAlertWithProfileUrl(alert, user_name, args)
 
 end
 
+function Instance:raiseFollowAlertWithProfileUrl(alert, user_name, args)
+	
+	-- Attempting new method to fetch the profile image.
+	-- fetch() isn't forming the proper URL for this request.  Need to append args.
+	
+	fetch(self, self.host, "/helix/users", {
+		login = user_name
+	}):next(jsonify):next(function(obj)
+
+		if (obj.data) then
+			
+			--log("[EventSub] We got Data back!")
+			args.profile_url = obj.data[1].profile_image_url
+			args.user_name = obj.data[1].display_name
+			
+			--log("[EventSub] user: " .. args.user_name .. " profile_url: " .. args.profile_url)
+			
+			self.properties.Alerts.onNewFollower:raise(
+				{
+					user_name=args.user_name,
+					profile_url = args.profile_url,
+				})	
+
+		end
+	end)
+		
+end
+
+
+function Instance:onNewEventFollower(obj)
+
+	-- The decode and username assignment is a bit messy.
+	-- I was getting errors about a table being expected.
+	-- Maybe revisit to clean it up.	
+	 
+	local obj = json.decode(obj)
+
+	--log("[EventSub] New Follower triggered " .. obj['user_name'])
+	
+	-- local username = obj['user_name']
+
+	-- Query is run on the user name when function is called
+	-- but doesn't work with the Twitch CLI server simulation.
+	-- log("[EventSub] Attempting to query user info: " .. obj['user_name'])
+	self:raiseFollowAlertWithProfileUrl(self.properties.Alerts.onNewFollower, obj['user_name'], {
+		user_name=obj['user_name']
+	})
+end
+
 function Instance:onNewFollower(obj)
+
+	log("[OLD PubSub] Follower triggered " 
+)
 
 	-- Suppress re-follows during this session
 	if (self.tblNewFollowers[obj.username]) then
@@ -556,7 +614,7 @@ function Instance:setUserID(user_id, login)
 		self.host.twitch:pubSubListen("channel-bits-events-v2." .. user_id, self, self.onCheer)
 		self.host.twitch:pubSubListen("channel-subscribe-events-v1." .. user_id, self, self.onNewSubscription)
 		self.host.twitch:pubSubListen("channel-points-channel-v1." .. user_id, self, self.onChannelPoints)
-		self.host.twitch:pubSubListen("following." .. user_id, self, self.onNewFollower)
+		self.host.twitch:eventSubListen("channel.follow", user_id, self, self.onNewEventFollower)
 		self.host.twitch:pubSubListen("raid." .. user_id, self, self.onRaid)
 		self:enableChat(true)
 			
