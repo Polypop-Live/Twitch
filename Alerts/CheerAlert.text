@@ -1,0 +1,5 @@
+<stringtable>
+  <ID name="Self_ToolTip">Creates an alert that fires when someone cheers over a specified threshold</ID>
+  <ID name="onCheer_ToolTip">Fires whenever someone cheers above the Threshold property value</ID>
+  <ID name="Threshold_ToolTip">Sets the number of bits required to fire an onCheer alert</ID>
+</stringtable>

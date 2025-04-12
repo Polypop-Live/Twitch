@@ -1,0 +1,5 @@
+<uix type="Output">
+  <name>Twitch Live Stream</name>
+  <group_name>Twitch</group_name>
+  <unique>true</unique>
+</uix>

@@ -1,0 +1,19 @@
+<stringtable>
+  <ID name="Self_ToolTip">Adds Twitch alerts</ID>
+  <ID name="Stats_UserName_ToolTip">Fires with the user name of the connected account</ID>
+  <ID name="Stats_ViewCount_ToolTip">Fires with the total number of views of the connected account</ID>
+  <ID name="Stats_FollowerCount_ToolTip">Fires with the total number of followers of the connected account</ID>
+  <ID name="Stats_SubscriberCount_ToolTip">Fires with the total number of subscribers of the connected account</ID>
+  <ID name="Stats_BitsTally_ToolTip">Fires with the total number of bits received during the session</ID>
+  <ID name="Alerts_onNewSubscription_ToolTip">Fires whenever someone subscribes or resubscribes</ID>
+  <ID name="Alerts_onGiftSubscription_ToolTip">Fires whenever someone gifts a subscription to someone else</ID>
+  <ID name="Alerts_onNewFollower_ToolTip">Fires whenever a new follower follows your channel</ID>
+  <ID name="Alerts_onChatMessage_ToolTip">Fires whenever a new chat message appears in your channel's chat.</ID>
+  <ID name="Alerts_Bits_GainAmount_ToolTip">Sets the number of gained overall bits required to fire an "on Bits Gained" alert</ID>
+  <ID name="Alerts_Bits_onBitsGained_ToolTip">Fires whenever the total bits received increases by the Gain Amount property value</ID>
+  <ID name="Alerts_Raids_onCountdownStart_ToolTip">Fires when a raid is initiated.</ID>
+  <ID name="Alerts_Raids_onCountdownTick_ToolTip">Fires every second after a raid is initiated while awaiting the raid to begin.</ID>
+  <ID name="Alerts_Raids_onGo_ToolTip">Fires when the raid actually happens.</ID>
+  <ID name="Alerts_Raids_onCancelled_ToolTip">Fires when the raid process is cancelled.</ID>
+  <ID name="Alerts_Raids_onIncomingRaid_ToolTip">Fires when the someone raids your channel. [user_name] contains the login name of the raider.</ID>
+</stringtable>

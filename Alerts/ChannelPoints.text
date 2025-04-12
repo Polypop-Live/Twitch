@@ -1,0 +1,6 @@
+<stringtable>
+  <ID name="Self_ToolTip">Creates an alert that fires when someone redeems a specified Custom Reward using Channel Points</ID>
+  <ID name="onRedeemed_ToolTip">Fires whenever someone redeems the selected Custom Reward</ID>
+  <ID name="CustomReward_ToolTip">Sets the custom reward that when redeemed, will cause the alert to fire. These are created/configured through the Creator Dashboard on Twitch.</ID>
+  <ID name="RefreshList_ToolTip">Refeshes the Custom Reward drop-down list.</ID>
+</stringtable>

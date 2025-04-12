@@ -1,0 +1,9 @@
+{
+    "name": "Twitch",
+    "author": "PolyPop",
+    "description": "Adds Twitch services including alerts and live-stream output.",
+    "category": "Web Services",
+    "url": "https://www.polypoplive.com",
+    "version": "1.0",
+    "min_app_version": "1.0"
+}

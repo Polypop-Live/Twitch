@@ -1,0 +1,4 @@
+<uix type="PolyPopHost">
+  <server>api.twitch.tv</server>
+  <name>Twitch Account</name>
+</uix>

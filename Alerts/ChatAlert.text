@@ -1,0 +1,7 @@
+<stringtable>
+  <ID name="Self_ToolTip">Creates an alert that fires when someone types a specific keyword in the chat.</ID>
+  <ID name="Command_ToolTip">Sets the keyword that causes the alert to fire when someone types it in the chat.</ID>
+  <ID name="Privilege_ToolTip">Sets the a user-level to restrict who can activate the alert.</ID>
+  <ID name="User_ToolTip">Sets the user login name that is allowed to activate the alert.</ID>
+  <ID name="onCommand_ToolTip">Fires when the command keyword is typed into the chat by someone with the corresponding Privilege.</ID>
+</stringtable>

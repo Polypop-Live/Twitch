@@ -1,0 +1,7 @@
+<uix type="Source">
+  <add_menu_group>Web Alerts</add_menu_group>
+  <cast_types>Host</cast_types>
+  <unique>true</unique>
+  <category>Web Alerts</category>
+  <name>Twitch Alerts</name>
+</uix>

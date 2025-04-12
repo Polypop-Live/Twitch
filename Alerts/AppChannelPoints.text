@@ -1,0 +1,8 @@
+<stringtable>
+  <ID name="Self_ToolTip">Creates a Custom Reward on Twitch and an associated alert that fires when someone redeems it using Channel Points</ID>
+  <ID name="onRedeemed_ToolTip">Fires whenever someone redeems the Custom Reward</ID>
+  <ID name="Title_ToolTip">Sets the name of the Custom Reward as it will appear on your Twitch chat panel.</ID>
+  <ID name="BackgroundColor_ToolTip">Sets the color of the Custom Reward as it will appear on your Twitch chat panel.</ID>
+  <ID name="Enabled_ToolTip">Enables/disables (by showing/hiding) the Custom Reward on your Twitch chat panel.</ID>
+  <ID name="Cost_ToolTip">Sets the number of Channel Points required to redeem.</ID>
+</stringtable>
