@@ -323,7 +323,7 @@ function Instance:checkChannelPoints(kit, obj)
 end
 
 function Instance:onChannelPoints(obj)
-	
+
 	if (not self:checkChannelPoints(self.properties.ChannelPoints:getKit(), obj)) then
 		self:checkChannelPoints(self.properties.AppChannelPoints:getKit(), obj)
 	end
@@ -1297,9 +1297,7 @@ end
 
 function Instance:queryUserInfo(login, fn)
 
-	--log("[EventSub] queryUserInfo: " .. login .. " with function: " .. tostring(fn))
 	if (self.user_cache[login] and self.user_cache[login].profile_image_url) then
-		--log("[EventSub] queryUserInfo: " .. login .. " already in cache")
 		local user_info = {
 			profile_image_url = self.user_cache[login].profile_image_url,
 			title = self.user_cache[login].title,

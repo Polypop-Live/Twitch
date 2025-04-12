@@ -1,8 +1,8 @@
 require "util"
 require "fetch"
 
-
 client_id = "hawpk393w7ctms9j5ex5jie3142yy0"
+client_secret = "lol no"
 twitch_scope = "chat:read+channel:read:stream_key+user:read:email+channel:read:subscriptions+channel:read:redemptions+channel:manage:redemptions+bits:read+channel:edit:commercial+moderator:read:chatters+moderator:read:followers+moderation:read+channel:read:vips"
 
 Instance.host = nil
@@ -26,6 +26,10 @@ function Instance:onInit()
 	self.host:addEventListener("onUnauthorizedRequest()", self, self.onUnauthorizedRequest)
 	self.host:addEventListener("onRequestOAuthToken()", self, self.onRequestOAuthToken)
 	self.host:addEventListener("onRevokeOAuthToken()", self, self.onRevokeOAuthToken)
+
+	self.id_host = getNetwork():getHost("id.twitch.tv")
+	self.id_host:setRateLimiterMode("TimeWindowWithSteadyState", "Global")
+	self.id_host:setAsAuthorized(true)
 
 	local cached_scope = self.host:readHostCache("scope", "")
 	if (cached_scope == twitch_scope) then
@@ -132,8 +136,20 @@ function Instance:tryRefreshToken()
 	if (refresh_token) then
 		log("[OAuth] Refreshing Token")
 		self.isAuthenticating = true
-		self.host:refreshOAuthToken("twitch", refresh_token, self, self.onOAuthToken)
-	end	
+
+		-- Refresh token
+		fetch(self, self.id_host, "/oauth2/token", {
+			form = {
+				client_id = client_id,
+				client_secret = client_secret,
+				grant_type = "refresh_token",
+				refresh_token = refresh_token
+			}
+		}):next(jsonify):next(function(obj)
+			self:onOAuthToken(obj)
+		end)		
+
+	end
 
 	self:setAsAuthorized(false)
 
@@ -148,17 +164,53 @@ function Instance:onRequestOAuthToken()
 	self.isAuthenticating = true
 
 	local strState = generateGUID()
-	local strURL = "https://id.twitch.tv/oauth2/authorize?client_id=" .. client_id .. "&redirect_uri=https://oauth.polypoplive.com/twitch.php&state=" .. strState .. "&response_type=code&scope=" .. twitch_scope .. "&force_verify=true"
+	local strURL = "https://id.twitch.tv/oauth2/authorize?client_id=" .. client_id .. "&redirect_uri=http://localhost:46500&state=" .. strState .. "&response_type=code&scope=" .. twitch_scope .. "&force_verify=true"
 
-	self.host:requestOAuthToken(strURL, strState, self, self.onOAuthToken)
+	self.host:enableLoopBackServer(46500, self, self.onLoopBackResponse)
+	openWebLink(strURL)
 
 end
 
-function Instance:onOAuthToken(response)
+function readLocalFile(filename)
+	local f = io.open(getLocalFolder() .. filename, "r")
+	if (io.type(f)=="file") then
+		local data = f:read("*all")
+		f:close()
+		return data
+	end
+	return ""
+end
+
+function Instance:onLoopBackResponse(target, body)
+
+	local tblTarget = split(target, "?")
+	local tblParams = queryStringToTable(tblTarget[2])
+	if (type(tblParams["code"]) == "string") then
+
+		fetch(self, self.id_host, "/oauth2/token", {
+			form = {
+				code = tblParams["code"],
+				client_id = client_id,
+				client_secret = client_secret,
+				redirect_uri = "http://localhost:46500",
+				grant_type = "authorization_code"
+			}
+		}):next(jsonify):next(function(obj)
+			self:onOAuthToken(obj, true)
+		end):catch(function(obj)
+			self:onOAuthToken(nil, true)
+		end)
+
+	else
+		self:onOAuthToken(nil, true)
+	end
+
+end
+
+function Instance:onOAuthToken(obj, close_loopback)
 
 	self.isAuthenticating = false
 
-	local obj = json.decode(response)
 	if (obj and type(obj["access_token"]) == "string") then
 
 		self.access_token = obj["access_token"]
@@ -171,17 +223,24 @@ function Instance:onOAuthToken(response)
 
 		log("[OAuth] Token acquired")
 		self:setAsAuthorized(true)
+
+		if (close_loopback) then
+			self.host:setLoopBackServerResponse(readLocalFile("success.html"))
+			self.host:disableLoopBackServer()
+		end
+
+	else
+		if (close_loopback) then
+			self.host:setLoopBackServerResponse(readLocalFile("error.html"))
+			self.host:disableLoopBackServer()
+		end
 	end
 
 end
 
 function Instance:onRevokeOAuthToken()
 
-	local id_host = getNetwork():getHost("id.twitch.tv")
-	id_host:setRateLimiterMode("TimeWindowWithSteadyState", "Global")
-	id_host:setAsAuthorized(true)
-	
-	fetch(self, id_host, "/oauth2/revoke", {
+	fetch(self, self.id_host, "/oauth2/revoke", {
 		body="client_id=" .. client_id .. "&token=" .. self.access_token
 	}):next(function(resp)
 		log("[OAuth] Token revoked")
@@ -239,12 +298,12 @@ function Instance:_WsConnect()
 	self.webSocket:addEventListener("onConnected", self, self._onWsConnected)
 	self.webSocket:addEventListener("onDisconnected", self, self._onWsDisconnected)
 	self.webSocket:addEventListener("onMessage", self, self._onWsMessage)
-
+	
 end
 
 function Instance:_onWsConnected()
 	log("[PubSub] Websocket connected")
-		
+
 	-- Connect to all listen
 	local topics = ""
 	for k,v in pairs(self.tblListen) do
@@ -554,3 +613,4 @@ function Instance:_ChatReset()
 	self.chatWebSocket = nil
 
 end
+
