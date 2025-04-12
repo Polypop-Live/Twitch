@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html>
+<body><script>
+	let pfx = location.search ? "&" : "?";
+	setTimeout(function () {
+		window.location = location.origin + location.pathname + location.search + pfx + location.hash.substr(1);
+	}, 100)
+</script></body>
+</html>

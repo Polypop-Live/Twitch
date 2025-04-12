@@ -1,3 +1,4 @@
+require "../hosts"
 
 function Instance:onInit()
 	local button_img = getEditor():createNewFromFile(self:getObjectKit(), "Static2DTexture", getLocalFolder() .. "EditTwitchStreamInfo_Button.png")
@@ -6,7 +7,7 @@ end
 
 function Instance:onRun()
 
-	self.host = getNetwork():getHost("api.twitch.tv")
+	self.host = getNetwork():getHost(twitch_api)
 	if (not self.host.twitch:isUserLoggedIn()) then
 		return
 	end

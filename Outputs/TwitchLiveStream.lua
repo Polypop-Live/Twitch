@@ -1,4 +1,5 @@
 require "fetch"
+require "../hosts"
 
 Instance.properties = properties({
 	{ name="Server", type="Enum" },
@@ -22,7 +23,7 @@ function Instance:onInit(constructor_type)
 		getEditor():createUIX(self.properties.LiveStream:getKit(), "core-app:Live Stream")
 	end
 
-	self.host = getNetwork():getHost("api.twitch.tv")
+	self.host = getNetwork():getHost(twitch_api)
 	self:addCast(self.host)
 	self:reqestIngests()
 
@@ -114,11 +115,7 @@ function Instance:requestURL(caller, call_back)
 	local userinfo = self.host.twitch:getUserInfo()
 
 	-- Query channel name
-	fetch(self, self.host, "/helix/channels", {
-		query = {
-			broadcaster_id = userinfo.id
-		}
-	}):next(jsonify):next(function(obj)
+	self.host.twitch:twitchGetChannelInformation(userinfo.id):next(function(obj)
 
 		local stream_name = obj["data"][1].title
 		if (stream_name=="") then
@@ -130,11 +127,7 @@ function Instance:requestURL(caller, call_back)
 	end):next(function(stream_name)
 	
 		-- Query stream key
-		fetch(self, self.host, "/helix/streams/key", {
-			query = {
-				broadcaster_id = userinfo.id
-			}
-		}):next(jsonify):next(function(obj)
+		self.host.twitch:twitchGetStreamKey(userinfo.id):next(function(obj)
 			call_back(caller, toURL(url, obj["data"][1].stream_key), stream_name)
 		end)
 

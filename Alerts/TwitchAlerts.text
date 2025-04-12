@@ -11,6 +11,8 @@
   <ID name="Alerts_onChatMessage_ToolTip">Fires whenever a new chat message appears in your channel's chat.</ID>
   <ID name="Alerts_Bits_GainAmount_ToolTip">Sets the number of gained overall bits required to fire an "on Bits Gained" alert</ID>
   <ID name="Alerts_Bits_onBitsGained_ToolTip">Fires whenever the total bits received increases by the Gain Amount property value</ID>
+  <ID name="Alerts_Raids_StartRaid_StartRaid_ToolTip">Initiate a raid.</ID>
+  <ID name="Alerts_Raids_StartRaid_UserToRaid_ToolTip">Broadcaster's login name to raid.</ID>
   <ID name="Alerts_Raids_onCountdownStart_ToolTip">Fires when a raid is initiated.</ID>
   <ID name="Alerts_Raids_onCountdownTick_ToolTip">Fires every second after a raid is initiated while awaiting the raid to begin.</ID>
   <ID name="Alerts_Raids_onGo_ToolTip">Fires when the raid actually happens.</ID>
