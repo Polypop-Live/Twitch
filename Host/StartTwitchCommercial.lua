@@ -1,4 +1,5 @@
 require "fetch"
+require "../hosts"
 
 Instance.properties = properties({
 	{ name="Length", type="Enum", items={"30 seconds", "60 seconds", "90 seconds", "120 seconds", "150 seconds", "180 seconds"}, value="60 seconds" },
@@ -25,7 +26,7 @@ end
 
 function Instance:onRun()
 	
-	self.host = getNetwork():getHost("api.twitch.tv")
+	self.host = getNetwork():getHost(twitch_api)
 	if (not self.host.twitch:isUserLoggedIn()) then
 		return
 	end
