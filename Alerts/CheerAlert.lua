@@ -1,7 +1,7 @@
 
 Instance.properties = properties({
 	{ name="Threshold", type="Int", range={min=1}, units="bits", value=500, onUpdate="onThresholdUpdate" },
-	{ name="onCheer", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", chat_message="[chat_message]", bits_used=0, total_bits_used=0 } }
+	{ name="onCheer", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", chat_message="[chat_message]", bits_used=0 } }
 })
 
 function Instance:onThresholdUpdate()
@@ -25,7 +25,7 @@ function Instance:onSimulateAlert(alert)
 		print("(Test) User " .. testuser .. " cheered " .. tostring(testBits) .. " bits", 213)
 		if (testBits > self.Threshold) then
 			local test_profile_url = "https://upload.wikimedia.org/wikipedia/commons/e/ed/Ara_macao_-on_a_small_bicycle-8.jpg"
-			self.onCheer:raise({user_name=testuser, profile_url=test_profile_url, chat_message="This is the user's chat message", bits_used=testBits, total_bits_used=testBits})
+			self.onCheer:raise({user_name=testuser, profile_url=test_profile_url, chat_message="This is the user's chat message", bits_used=testBits })
 		end
 	end
 

@@ -13,20 +13,15 @@ Instance.properties = properties({
 		{ name="onNewFollower", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]" } },
 		{ name="onChatMessage", type="Alert", args={ user_name="[user_name]", msg="[msg]"} },
 		{ name="Subscriptions", type="PropertyGroup", items={
-			{ name="onNewSubscription", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", cumulative_months=0, streak_months=0 } },
-			{ name="onReSubscription", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", cumulative_months=0, streak_months=0 } },
-			{ name="onGiftSubscription", type="Alert", args={ from_user_name="[from_user_name]", from_profile_url="[from_profile_url]", to_user_name="[to_user_name]", to_profile_url="[to_profile_url]", months=0 } },
-			{ name="onRegiftSubscription", type="Alert", args={ from_user_name="[from_user_name]", from_profile_url="[from_profile_url]", to_user_name="[to_user_name]", to_profile_url="[to_profile_url]", months=0 } },
+			{ name="onNewSubscription", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", is_gift=false } },
+			{ name="onReSubscription", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", cumulative_months=0, streak_months=0, duration_months=0, tier="1000", message="" } },
+			{ name="onGiftSubscription", type="Alert", args={ from_user_name="[from_user_name]", from_profile_url="[from_profile_url]", total_subs=0, tier="1000", cumulative_subs=0 } }
 		}},
 		{ name="Bits", type="PropertyGroup", items={
 			{ name="GainAmount", type="Int", range={min=1}, units="bits", value=500 },
 			{ name="onBitsGained", type="Alert", args={ gain_level=0 } },
 		}},
 		{ name="Raids", type="PropertyGroup", items={
-			{ name="onCountdownStart", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", seconds_remaining=90 } },
-			{ name="onCountdownTick", type="Alert", args={ user_name="[user_name]", seconds_remaining=90 } },
-			{ name="onGo", type="Alert", args={ user_name="[user_name]" } },
-			{ name="onCancelled", type="Alert", args={ user_name="[user_name]"} },
 			{ name="onIncomingRaid", type="Alert", args={ user_name="[user_name]", profile_url="[profile_url]", viewers=0 } }
 		}}
 	}},
@@ -45,6 +40,7 @@ Instance.total_subs = 0
 Instance.today_subs = 0
 Instance.bitsTally = 0
 Instance.gainLevel = 0
+Instance.followerCount = 0
 Instance.rqViewers = nil
 Instance.rqChatSubs = nil
 Instance.rqSubs = nil
@@ -62,6 +58,7 @@ Instance.tblNewFollowers = {}
 Instance.texProfile = nil
 
 function Instance:onInit(constructor_type)
+
 	self.host = getNetwork():getHost("api.twitch.tv")
 	self:addCast(self.host)
 
@@ -170,8 +167,7 @@ function Instance:onSimulateAlert(alert)
 		{
 			user_name=test_user,
 			profile_url = test_profile_url,
-			cumulative_months=math.random(1,100),
-			streak_months=math.random(1,10)
+			is_gift = false
 		})	
 
 	elseif (alert == self.properties.Alerts.Subscriptions.onReSubscription) then
@@ -184,37 +180,24 @@ function Instance:onSimulateAlert(alert)
 			user_name=test_user,
 			profile_url = test_profile_url,
 			cumulative_months=math.random(1,100),
-			streak_months=math.random(1,10)
+			streak_months=math.random(1,10),
+			duration_months=math.random(1,10),
+			tier="1000",
+			message="Love the stream!"
 		})	
 
 	elseif (alert == self.properties.Alerts.Subscriptions.onGiftSubscription) then
 		
 		local from_test_user = "testuserPOP" .. tostring(math.random(100,100000))
-		local to_test_user = "testuserPOP" .. tostring(math.random(100,100000))
 
-		print("(Test) User " .. from_test_user .. " is gifting " .. to_test_user, 213)
+		print("(Test) User " .. from_test_user .. " is gifting someone.", 213)
 		self.properties.Alerts.Subscriptions.onGiftSubscription:raise(
 		{
 			from_user_name=from_test_user,
-			to_user_name=to_test_user,
 			from_profile_url = test_profile_url,
-			to_profile_url = "https://upload.wikimedia.org/wikipedia/commons/7/7e/Sunconurepuzzle.jpg",
-			months=math.random(1,10)
-		})	
-
-	elseif (alert == self.properties.Alerts.Subscriptions.onRegiftSubscription) then
-		
-		local from_test_user = "testuserPOP" .. tostring(math.random(100,100000))
-		local to_test_user = "testuserPOP" .. tostring(math.random(100,100000))
-
-		print("(Test) User " .. from_test_user .. " is regifting " .. to_test_user, 213)
-		self.properties.Alerts.Subscriptions.onRegiftSubscription:raise(
-		{
-			from_user_name=from_test_user,
-			to_user_name=to_test_user,
-			from_profile_url = test_profile_url,
-			to_profile_url = "https://upload.wikimedia.org/wikipedia/commons/7/7e/Sunconurepuzzle.jpg",
-			months=math.random(1,10)
+			cumulative_subs=math.random(1,10),
+			tier="1000",
+			total_subs=math.random(1,10)
 		})	
 
 	elseif (alert == self.properties.Alerts.onChatMessage) then
@@ -234,37 +217,6 @@ function Instance:onSimulateAlert(alert)
 		local test_user = "testuserPOP" .. tostring(math.random(100,100000))
 		self.properties.Alerts.Raids.onIncomingRaid:raise({user_name=test_user, profile_url=test_profile_url, viewers=math.random(10,1000)})
 		print("(Test) User " .. test_user .. " is raiding you.", 324)
-
-	elseif (alert == self.properties.Alerts.Raids.onCountdownStart) then
-		local test_user = "testuserPOP" .. tostring(math.random(100,100000))
-
-		print("(Test) User " .. test_user .. " being raided in 5 seconds", 324)
-		
-		local obj = {}
-		obj.type = "raid_update_v2"
-		obj.raid = {
-			target_login=test_user,
-			force_raid_now_seconds=6
-		}
-		self.isTestRaid = true
-		self:onRaid(obj)
-	elseif (alert == self.properties.Alerts.Raids.onGo or alert==self.properties.Alerts.Raids.onCountdownTick) then
-		print("Use the 'on Countdown Start' alert to test.")
-	elseif (alert == self.properties.Alerts.Raids.onCancelled) then
-		
-		if (not self.isTestRaid) then
-			print("First, use the 'on Countdown Start' alert to start test.")
-			return
-		end
-
-		local obj = {}
-		obj.type = "raid_cancel_v2"
-		obj.raid = {
-			target_login=self.user_to_raid
-		}
-		self:onRaid(obj)
-		self.isTestRaid = false
-		print("(Test) Raid cancelled")
 	else
 		alert:raise(alert:getLastArgs())
 	end
@@ -273,23 +225,25 @@ end
 
 function Instance:onCheer(obj)
 
-	local cheer_alert = self:findHighestCheerAlert(obj.data.bits_used)
+	local cheer_alert = self:findHighestCheerAlert(obj.bits)
 	if (cheer_alert) then
 
-		if (obj.data.is_anonymous) then
-			obj.data.user_name = "Anonymous"
-		end
+		local args = {
+			user_name=obj.user_name,
+			chat_message=obj.message,
+			bits_used=obj.bits
+		}
 
-		self:raiseAlertWithProfileUrl(cheer_alert, obj.data.user_name, {
-			user_name=obj.data.user_name,
-			chat_message=obj.data.chat_message,
-			bits_used=obj.data.bits_used,
-			total_bits_used=obj.data.total_bits_used,
-		})
+		if (not obj.is_anonymous) then
+			self:raiseAlertWithProfileUrl(cheer_alert, obj.user_name, args)
+		else
+			args.user_name = "Anonymous"
+			cheer_alert:raise(args)
+		end
 
 	end
 
-	self:accrueBits(obj.data.bits_used)
+	self:accrueBits(obj.bits)
 
 end
 
@@ -305,11 +259,11 @@ function Instance:checkChannelPoints(kit, obj)
 			title = cp.properties.Title
 		end
 
-		if (title == obj.data.redemption.reward.title) then
+		if (title == obj.reward.title) then
 
-			self:raiseAlertWithProfileUrl(cp.properties.onRedeemed, obj.data.redemption.user.login, {
-				user_name=obj.data.redemption.user.login, 
-				user_input=obj.data.redemption.user_input,
+			self:raiseAlertWithProfileUrl(cp.properties.onRedeemed, obj.user_name, {
+				user_name=obj.user_name, 
+				user_input=obj.user_input,
 				reward_name=title
 			})	
 
@@ -348,58 +302,56 @@ function Instance:onNewSubscription(obj)
 	self.today_subs = self.today_subs + 1
 	self.properties.Stats.SubscriberCount:raise({total_sub_count=self.total_subs, today_sub_count=self.today_subs})
 
-	if (obj.context == "sub" or obj.context=="resub") then
-		
-		if (not obj.streak_months) then
-			obj.streak_months = 0
-		end
+	local args = {
+		user_name=obj.user_name,
+		is_gift=obj.is_gift
+	}
+	self:raiseAlertWithProfileUrl(self.properties.Alerts.Subscriptions.onNewSubscription, obj.user_name, args)
 
-		local args = {
-			user_name=obj.user_name,
-			cumulative_months=obj.cumulative_months,
-			streak_months=obj.streak_months
-		}
+end
 
-		local alert
-		if (obj.context == "sub") then
-			alert = self.properties.Alerts.Subscriptions.onNewSubscription
-		else 
-			alert = self.properties.Alerts.Subscriptions.onReSubscription
-		end
+function Instance:onReSubscription(obj)
 
-		self:raiseAlertWithProfileUrl(alert, obj.user_name, args)
+	if (not obj.streak_months) then
+		obj.streak_months = -1
+	end
 
-	else
+	local args = {
+		user_name=obj.user_name,
+		cumulative_months=obj.cumulative_months,
+		streak_months=obj.streak_months,
+		duration_months=obj.duration_months,
+		tier=obj.tier,
+		message=obj.message.text
+	}
+	self:raiseAlertWithProfileUrl(self.properties.Alerts.Subscriptions.onReSubscription, obj.user_name, args)
 
-		if (not obj.user_name) then
-			obj.user_name = "Anonymous"
-		end
+end
 
-		local args = {
-			from_user_name=obj.user_name,
-			to_user_name=obj.recipient_user_name,
-			months=obj.months,
-		}
+function Instance:onGiftSubscription(obj)
 
-		local alert
-		if (obj.context == "subgift" or obj.context == "anonsubgift") then
-			alert = self.properties.Alerts.Subscriptions.onGiftSubscription
-		else
-			alert = self.properties.Alerts.Subscriptions.onRegiftSubscription
-		end
+	if (obj.is_anonymous) then
+		obj.user_name = "Anonymous"
+	end
+
+	local args = {
+		from_user_name=obj.user_name,
+		total_subs=obj.total,
+		tier=obj.tier,
+		cumulative_subs=obj.cumulative_total
+	}
+
+	if (not obj.is_anonymous) then
 
 		self:queryUserInfo(obj.user_name, function (info)
 			if (info) then
 				args.from_profile_url = info.profile_image_url
 			end
-			self:queryUserInfo(obj.recipient_user_name, function (info)
-				if (info) then
-					args.to_profile_url = info.profile_image_url
-				end
-				alert:raise(args)
-			end)
-		end)	
+			self.properties.Alerts.Subscriptions.onGiftSubscription:raise(args)
+		end)
 
+	else
+		self.properties.Alerts.Subscriptions.onGiftSubscription:raise(args)
 	end
 
 end
@@ -418,102 +370,25 @@ end
 function Instance:onNewFollower(obj)
 
 	-- Suppress re-follows during this session
-	if (self.tblNewFollowers[obj.username]) then
+	if (self.tblNewFollowers[obj.user_name]) then
 		return
 	end
-	self.tblNewFollowers[obj.username] = true
+	self.tblNewFollowers[obj.user_name] = true
+	self.followerCount = self.followerCount + 1
+	self.properties.Stats.FollowerCount:raise({count=self.followerCount})
 
-	self:raiseAlertWithProfileUrl(self.properties.Alerts.onNewFollower, obj.username, {
-		user_name=obj.username
+	self:raiseAlertWithProfileUrl(self.properties.Alerts.onNewFollower, obj.user_name, {
+		user_name=obj.user_name
 	})
-
-end
-
-Instance.user_to_raid = nil
-Instance.raidSecsToGo = seconds(0)
-Instance.isTestRaid = false
-
-function Instance:onRaidCountdown()
-	self.raidSecsToGo = self.raidSecsToGo - 1
-
-	self.properties.Alerts.Raids.onCountdownTick:raise(
-	{
-		user_name=self.user_to_raid,
-		seconds_remaining=self.raidSecsToGo
-	})
-
-	if (self.raidSecsToGo <= 0) then
-		getAnimator():stopTimer(self, self.onRaidCountdown)
-	
-		if (self.isTestRaid) then
-			
-			print("(Test) User " .. self.user_to_raid .. " raided", 324)
-
-			local obj = {}
-			obj.type = "raid_go_v2"
-			obj.raid = {
-				target_login=self.user_to_raid
-			}
-
-			self:onRaid(obj)
-			self.isTestRaid = false
-
-		end
-
-	end
-
-	if (self.isTestRaid) then
-		print("(Test) User " .. self.user_to_raid .. " being raided in " .. tostring(self.raidSecsToGo) .. " seconds", 324)
-	end
 
 end
 
 function Instance:onRaid(obj)
 
-	if (obj.type == "raid_update_v2") then
-
-		if (obj.raid.target_login ~= self.user_to_raid) then
-			self.user_to_raid = obj.raid.target_login
-			local timeToGo = tonumber(obj.raid.force_raid_now_seconds)
-			self.raidSecsToGo = timeToGo - 1
-			getAnimator():createTimer(self, self.onRaidCountdown, seconds(1), true)
-
-			self:raiseAlertWithProfileUrl(self.properties.Alerts.Raids.onCountdownStart, obj.raid.target_login, {
-				user_name=obj.raid.target_login,
-				seconds_remaining=timeToGo
-			})
-
-		end
-
-	elseif (obj.type == "raid_go_v2") then
-	
-		if (obj.raid.target_login == self.user_to_raid) then
-	
-			getAnimator():stopTimer(self, self.onRaidCountdown)
-
-			self.properties.Alerts.Raids.onGo:raise(
-			{
-				user_name=obj.raid.target_login
-			})
-			
-			self.user_to_raid = nil
-
-		end
-
-	elseif (obj.type == "raid_cancel_v2") then
-
-		if (obj.raid.target_login == self.user_to_raid) then
-			getAnimator():stopTimer(self, self.onRaidCountdown)
-
-			self.properties.Alerts.Raids.onCancelled:raise(
-			{
-				user_name=obj.raid.target_login
-			})
-		
-			self.user_to_raid = nil
-		end
-
-	end
+	self:raiseAlertWithProfileUrl(self.properties.Alerts.Raids.onIncomingRaid, obj.from_broadcaster_user_name, {
+		user_name=obj.from_broadcaster_user_name,
+		viewers=obj.viewers
+	})
 
 end
 
@@ -553,11 +428,14 @@ function Instance:setUserID(user_id, login)
 	self.login = login
 
 	if (user_id) then
-		self.host.twitch:pubSubListen("channel-bits-events-v2." .. user_id, self, self.onCheer)
-		self.host.twitch:pubSubListen("channel-subscribe-events-v1." .. user_id, self, self.onNewSubscription)
-		self.host.twitch:pubSubListen("channel-points-channel-v1." .. user_id, self, self.onChannelPoints)
-		self.host.twitch:pubSubListen("following." .. user_id, self, self.onNewFollower)
-		self.host.twitch:pubSubListen("raid." .. user_id, self, self.onRaid)
+	
+		self.host.twitch:eventSubListen("channel.cheer", self, self.onCheer)
+		self.host.twitch:eventSubListen("channel.subscribe", self, self.onNewSubscription)
+		self.host.twitch:eventSubListen("channel.subscription.gift", self, self.onGiftSubscription)
+		self.host.twitch:eventSubListen("channel.subscription.message", self, self.onReSubscription)
+		self.host.twitch:eventSubListen("channel.channel_points_custom_reward_redemption.add", self, self.onChannelPoints)
+		self.host.twitch:eventSubListen("channel.follow", self, self.onNewFollower)
+		self.host.twitch:eventSubListen("channel.raid", self, self.onRaid)
 		self:enableChat(true)
 			
 		self.ptFollows:setEnabled(true)
@@ -582,7 +460,7 @@ function Instance:setUserID(user_id, login)
 	elseif (last_user_id) then
 
 		self:enableChat(false)
-		self.host.twitch:pubSubUnlistenAll()
+		self.host.twitch:eventSubUnlistenAll()
 		self.texProfile:setURL("")
 		self.ptFollows:setEnabled(false)
 		self.ptSubscribers:setEnabled(false)
@@ -639,6 +517,7 @@ function Instance:onPollFollowers()
 	self.ptFollows:setTime(seconds(60))
 
 	return self:getFollowerCount(self.userID, function(count)
+		self.followerCount = count
 		self.properties.Stats.FollowerCount:raise({count=count})
 	end)
 
@@ -1295,8 +1174,9 @@ function Instance:getDisplayName(login)
 	return login
 end
 
-function Instance:queryUserInfo(login, fn)
+function Instance:queryUserInfo(user_name, fn)
 
+	local login = user_name:lower()
 	if (self.user_cache[login] and self.user_cache[login].profile_image_url) then
 		local user_info = {
 			profile_image_url = self.user_cache[login].profile_image_url,

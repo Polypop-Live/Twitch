@@ -91,7 +91,7 @@ function Instance:setAsAuthorized(bAuthorized)
 	self.host:setAsAuthorized(bAuthorized)
 	
 	if (not bAuthorized) then
-		self:_WsReset()
+		self:_EventSubReset()
 		self:_ChatReset()
 		self.userinfo.id = 0
 		self.userinfo.login = nil
@@ -251,133 +251,244 @@ function Instance:onRevokeOAuthToken()
 
 end
 
-
 --------------------------------------------------------------------------------
--- PubSub stuff
+-- EventSub stuff (replaces PubSub)
 --------------------------------------------------------------------------------
 
-Instance.tblListen = {}
-Instance.webSocket = nil
+Instance.tblEventSubs = {}
+Instance.eventSubWebSocket = nil
+Instance.eventSubSessionID = nil
+Instance.eventSubReconnectURL = nil
+Instance.eventSubKeepAliveTime = 0
 
-function Instance:pubSubListen(topic, inst, fn)
+-- Subscription types to event handlers mapping
+function Instance:eventSubListen(subscriptionType, inst, fn)
 
-	-- Skip if already listening
-	-- We presume only one user of this host for now
-	if (self.tblListen[topic]) then
-		return
-	end
+    -- Skip if already listening
+    if self.tblEventSubs[subscriptionType] then
+        return
+    end
 
-	self.tblListen[topic] = { inst=inst, fn=fn }
+    self.tblEventSubs[subscriptionType] = { inst=inst, fn=fn }
 
-	if (not self.webSocket) then
-		self:_WsConnect()		-- Connect on first listen
-	elseif (self.webSocket:isConnected()) then
-		self.webSocket:send('{ "type":"LISTEN", "data": { "topics": ["' .. topic .. '"], "auth_token": "' .. self.access_token .. '" } }')
-	end
-	
+    if not self.eventSubWebSocket then
+        self:_EventSubConnect()
+    elseif self.eventSubWebSocket:isConnected() and self.eventSubSessionID then
+        self:_EventSubSubscribe(subscriptionType)
+    end
 end
 
-function Instance:pubSubUnlistenAll()
+function Instance:eventSubUnlistenAll()
+    if self.eventSubWebSocket and self.eventSubWebSocket:isConnected() then
+        for subscriptionType, _ in pairs(self.tblEventSubs) do
+            -- No need to explicitly unsubscribe since the connection closing will clear all subscriptions
+            -- EventSub subscriptions are tied to the session
+            log("[EventSub] Unsubscribing from: " .. subscriptionType)
+            --self:_EventSubUnsubscribe(subscriptionType)
+        end
+    end
 
-	if (self.webSocket and self.webSocket:isConnected()) then
-		for k,v in pairs(self.tblListen) do
-			self.webSocket:send('{ "type":"UNLISTEN", "data": { "topics": ["' .. k .. '"], "auth_token": "' .. self.access_token .. '" } }')
-		end
-	end
+    self.tblEventSubs = {}
+    self:_EventSubReset()
+end
 
-	self.tblListen = {}
-	self:_WsReset()
+function Instance:_EventSubConnect()
+    log("[EventSub] Opening WebSocket connection")
+    
+    local url = "wss://eventsub.wss.twitch.tv/ws"
+    -- Use reconnect URL if available during reconnection
+    if self.eventSubReconnectURL then
+        url = self.eventSubReconnectURL
+        log("[EventSub] Using reconnect URL: " .. url)
+    end
+    
+    self.eventSubWebSocket = self.host:openWebSocket(url)
+    self.eventSubWebSocket:setAutoReconnect(false)  -- Manual reconnect to handle reconnection URLs
+    self.eventSubWebSocket:addEventListener("onConnected", self, self._onEventSubConnected)
+    self.eventSubWebSocket:addEventListener("onDisconnected", self, self._onEventSubDisconnected)
+    self.eventSubWebSocket:addEventListener("onMessage", self, self._onEventSubMessage)
+end
+
+function Instance:_onEventSubConnected()
+    log("[EventSub] WebSocket connected")
+    -- Wait for the welcome message, which will trigger subscriptions
+end
+
+function Instance:_EventSubProcessWelcome(payload)
+    self.eventSubSessionID = payload.session.id
+    self.eventSubKeepAliveTime = payload.session.keepalive_timeout_seconds
+    log("[EventSub] Session established with ID: " .. self.eventSubSessionID)
+    log("[EventSub] Keep-alive timeout: " .. self.eventSubKeepAliveTime .. " seconds")
+    
+    -- Create timer for session monitoring
+    self:_EventSubCreateKeepAliveTimer()
+    
+    -- Subscribe to all topics
+    for subscriptionType, _ in pairs(self.tblEventSubs) do
+        self:_EventSubSubscribe(subscriptionType)
+    end
+end
+
+function Instance:_EventSubProcessReconnect(payload)
+    self.eventSubReconnectURL = payload.session.reconnect_url
+    log("[EventSub] Reconnect URL received: " .. self.eventSubReconnectURL)
+end
+
+function Instance:_EventSubProcessNotification(payload)
+    local subscriptionType = payload.subscription.type
+    log("[EventSub] Received notification for: " .. subscriptionType)
+    
+    local subInfo = self.tblEventSubs[subscriptionType]
+    if subInfo then
+        -- Call the registered handler
+        subInfo.fn(subInfo.inst, payload.event)
+    end
+end
+
+function Instance:_EventSubSubscribe(subscriptionType)
+    if not self.eventSubSessionID or not self:isUserLoggedIn() then
+        log("[EventSub] Cannot subscribe - no session ID or not logged in")
+        return
+    end
+    
+    log("[EventSub] Subscribing to: " .. subscriptionType)
+    
+    local condition = {
+        broadcaster_user_id = self.userinfo.id
+    }
+    
+    local subVersion = "1"
+
+    -- Some subscription types need specific condition parameters
+    if subscriptionType == "channel.raid" then
+        condition = {
+            to_broadcaster_user_id = self.userinfo.id
+        }
+    elseif subscriptionType == "channel.follow" then
+        subVersion = "2"
+        condition = {
+            broadcaster_user_id = self.userinfo.id,
+            moderator_user_id = self.userinfo.id
+        }
+    end
+    
+    -- Create subscription using EventSub API
+    fetch(self, self.host, "/helix/eventsub/subscriptions", {
+        method = "POST",
+        headers = { "Content-Type: application/json" },
+        body = json.encode({
+            type = subscriptionType,
+            version = subVersion,
+            condition = condition,
+            transport = {
+                method = "websocket",
+                session_id = self.eventSubSessionID
+            }
+        })
+    }):next(jsonify):next(function(obj)
+        if obj.data and #obj.data > 0 then
+            log("[EventSub] Successfully subscribed to: " .. subscriptionType)
+            self.tblEventSubs[subscriptionType].id = obj.data[1].id
+        else
+            log("[EventSub] Failed to subscribe to: " .. subscriptionType)
+            if obj.error then
+                log("[EventSub] Error: " .. obj.error .. " - " .. obj.message)
+            end
+        end
+    end):catch(function(error)
+        log("[EventSub] Subscription error: " .. tostring(error))
+    end)
+end
+
+function Instance:_EventSubUnsubscribe(subscriptionType)
+    if not self.tblEventSubs[subscriptionType].id or not self.eventSubSessionID or not self:isUserLoggedIn() then
+        log("[EventSub] Cannot unsubscribe - no session ID or not logged in")
+        return
+    end
+    
+    log("[EventSub] Unsubscribing to: " .. subscriptionType)
+   
+    -- Create subscription using EventSub API
+    fetch(self, self.host, "/helix/eventsub/subscriptions?id=" .. self.tblEventSubs[subscriptionType].id, {
+        method = "DELETE",
+    }):catch(function(error)
+        log("[EventSub] Unsubscription error: " .. tostring(error))
+    end)
+
+    self.tblEventSubs[subscriptionType].id = nil
 
 end
 
-function Instance:_WsConnect()
-	log("[PubSub] Opening websocket")
-
-	self.webSocket = self.host:openWebSocket("wss://pubsub-edge.twitch.tv")
-	self.webSocket:setAutoReconnect(true)
-	self.webSocket:addEventListener("onConnected", self, self._onWsConnected)
-	self.webSocket:addEventListener("onDisconnected", self, self._onWsDisconnected)
-	self.webSocket:addEventListener("onMessage", self, self._onWsMessage)
-	
+function Instance:_EventSubCreateKeepAliveTimer()
+    -- Set timer to reconnect if we don't receive a keep-alive in time
+    local timeout = self.eventSubKeepAliveTime + 10 -- Add buffer
+    getAnimator():createTimer(self, self._EventSubKeepAliveTimeout, seconds(timeout))
 end
 
-function Instance:_onWsConnected()
-	log("[PubSub] Websocket connected")
-
-	-- Connect to all listen
-	local topics = ""
-	for k,v in pairs(self.tblListen) do
-		if (topics ~= "") then
-			topics = topics .. ","
-		end
-		topics = topics .. '"' .. k .. '"'
-	end
-
-	self.webSocket:send('{ "type":"LISTEN", "data": { "topics": [' .. topics .. '], "auth_token": "' .. self.access_token .. '" } }')
-	self:_WsCreatePingTimer()
-
+function Instance:_EventSubKeepAliveTimeout()
+    log("[EventSub] Keep-alive timeout, reconnecting")
+    self:_EventSubReconnect()
 end
 
-function Instance:_WsCreatePingTimer()
-	getAnimator():createTimer(self, self._WsPingServer, seconds(60*(4.5+math.random()*0.4)))
+function Instance:_EventSubReconnect()
+    if self.eventSubWebSocket and self.eventSubWebSocket:isConnected() then
+        self.eventSubWebSocket:disconnect()
+    end
+    
+    getAnimator():createTimer(self, function()
+        self:_EventSubConnect()
+    end, seconds(1))
 end
 
-function Instance:_WsPingServer()
-	log("[PubSub] Pinging Twitch")
-	self.webSocket:send('{ "type":"PING" }')
-	getAnimator():createTimer(self, self._WsReconnect, seconds(10))
+function Instance:_onEventSubMessage(msg)
+    local obj = json.decode(msg)
+    
+    if obj.metadata and obj.metadata.message_type then
+        local messageType = obj.metadata.message_type
+        
+        -- Reset keep-alive timer on any message
+        getAnimator():stopTimer(self, self._EventSubKeepAliveTimeout)
+        
+        if messageType == "session_welcome" then
+            self:_EventSubProcessWelcome(obj.payload)
+        elseif messageType == "session_keepalive" then
+            self:_EventSubCreateKeepAliveTimer()
+        elseif messageType == "session_reconnect" then
+            self:_EventSubProcessReconnect(obj.payload)
+            self:_EventSubReconnect()
+        elseif messageType == "notification" then
+            self:_EventSubProcessNotification(obj.payload)
+        elseif messageType == "revocation" then
+            log("[EventSub] Subscription revoked: " .. obj.payload.subscription.type)
+            -- Could resubscribe here if needed
+        end
+    end
 end
 
-function Instance:_WsReconnect()
-	log("[PubSub] No ping response, reconnecting")
-	self.webSocket:reconnect()
+function Instance:_onEventSubDisconnected()
+    log("[EventSub] WebSocket disconnected")
+    getAnimator():stopTimer(self, self._EventSubKeepAliveTimeout)
+    
+    -- Attempt to reconnect using the reconnect URL if we have one
+    getAnimator():createTimer(self, function()
+        self:_EventSubConnect()
+    end, seconds(1))
 end
 
-function Instance:_onWsMessage(msg)
-
-	local obj = json.decode(msg)
-
-	if (obj.type == "PONG") then
-		log("[PubSub] Twitch responded to PING")
-		getAnimator():stopTimer(self, self._WsReconnect)
-		self:_WsCreatePingTimer()
-	elseif (obj.type == "RECONNECT") then
-		log("[PubSub] Twitch requiring Reconnect")
-		self:_WsReconnect()
-	elseif (obj.type == "MESSAGE") then
-		if (obj.data.topic) then
-			local elem = self.tblListen[obj.data.topic]
-			if (elem) then
-				elem.fn(elem.inst, json.decode(obj.data.message))
-			end
-		end
-	elseif (obj.type == "RESPONSE") then
-		if (obj.error == "ERR_BADAUTH") then
-			log("[PubSub] Bad OAuth")
-			self:tryRefreshToken()
-		end
-	end
-
-end
-
-function Instance:_onWsDisconnected()
-	getAnimator():stopTimer(self, self._WsPingServer)
-	getAnimator():stopTimer(self, self._WsReconnect)
-end
-
-function Instance:_WsReset()
-
-	if (exists(self.webSocket)) then
-		log("[PubSub] Closing websocket")
-		self.webSocket:removeEventListener("onConnected", self, self._onWsConnected)
-		self.webSocket:removeEventListener("onDisconnected", self, self._onWsDisconnected)
-		self.webSocket:removeEventListener("onMessage", self, self._onWsMessage)
-		self.webSocket:disconnect()
-		self:_onWsDisconnected()
-	end
-	self.tblListen = {}
-	self.webSocket = nil
-
+function Instance:_EventSubReset()
+    if exists(self.eventSubWebSocket) then
+        log("[EventSub] Closing WebSocket")
+        self.eventSubWebSocket:removeEventListener("onConnected", self, self._onEventSubConnected)
+        self.eventSubWebSocket:removeEventListener("onDisconnected", self, self._onEventSubDisconnected)
+        self.eventSubWebSocket:removeEventListener("onMessage", self, self._onEventSubMessage)
+        self.eventSubWebSocket:disconnect()
+        getAnimator():stopTimer(self, self._EventSubKeepAliveTimeout)
+    end
+    
+    self.eventSubWebSocket = nil
+    self.eventSubSessionID = nil
+    self.tblEventSubs = {}
+    -- Keep the reconnect URL in case we need it for reconnections
 end
 
 --------------------------------------------------------------------------------
